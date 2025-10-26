@@ -1,10 +1,11 @@
-package com.mp.data_hub_lib.manager
+package com.dark.neuroverse.worker
 
-import android.adservices.ondevicepersonalization.ModelManager
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
-import com.mp.ai_core.EmbeddingManager
+import com.dark.ai_module.model.LoadState
+import com.dark.ai_module.model.ModelType
+import com.dark.ai_module.workers.ModelManager
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.BuildConfig
 import com.mp.data_hub_lib.model.DataSetModel
@@ -34,12 +35,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 object DataHubManager {
     private const val TAG = "DataHubManager"
 
-    // Configuration
-    var embeddingModelPath = ""
-
     // Core components - properly separated
     private var dataHubWorker: DataHubWorker? = null
-    private val embeddingManager: EmbeddingManager = EmbeddingManager.getInstance()
 
     // Thread safety
     private val initMutex = Mutex()
@@ -69,13 +66,6 @@ object DataHubManager {
      * Initialize DataHubManager with proper resource management
      */
     fun init(context: Context) {
-        val file = File(context.filesDir, "embedding.gguf")
-        embeddingModelPath = file.absolutePath
-
-        if (!file.exists()) {
-            installEmbeddingModelFromAssets(context, "embedding.gguf", file)
-        }
-
         if (isInitialized.getAndSet(true)) {
             Log.d(TAG, "Already initialized")
             return
@@ -113,20 +103,17 @@ object DataHubManager {
 
         try {
             _ragStatus.value = RAGStatus.INITIALIZING
+            val embeddingModelPath =
+                ModelManager.getAllModels().firstOrNull { it.modelType == ModelType.EMBEDDING }
+                    ?: throw IOException("Embedding model not found")
             Log.d(TAG, "Initializing embedding model...")
-
-            embeddingManager.initializeEmbedding(embeddingModelPath).fold(
-                onSuccess = {
+            ModelManager.loadEmbeddingModel(embeddingModelPath) {
+                if (it is LoadState.OnLoaded) {
                     isEmbeddingInitialized.set(true)
                     _ragStatus.value = RAGStatus.READY
-                    Log.i(TAG, "Embedding model initialized successfully")
-                },
-                onFailure = { error ->
-                    _ragStatus.value = RAGStatus.ERROR
-                    Log.e(TAG, "Failed to initialize embedding model: ${error.message}")
-                    throw error
+                    Log.d(TAG, "Embedding model initialized successfully")
                 }
-            )
+            }
         } catch (e: Exception) {
             _ragStatus.value = RAGStatus.ERROR
             isEmbeddingInitialized.set(false)
@@ -256,14 +243,12 @@ object DataHubManager {
                 return Result.failure(Exception("Failed to initialize embedding model"))
             }
         }
-
         return try {
-            embeddingManager.getEmbedding(query).also { result ->
-                result.onSuccess {
-                    Log.d(TAG, "Query embedding generated successfully (${it.size} dimensions)")
-                }.onFailure { error ->
-                    Log.e(TAG, "Failed to generate query embedding: ${error.message}")
-                }
+            val array = ModelManager.generateEmbeddings(query)
+            if (array.isEmpty()) {
+                Result.failure(Exception("Generated embedding is empty"))
+            } else {
+                Result.success(array)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception generating query embedding", e)
@@ -329,9 +314,7 @@ object DataHubManager {
      * Main RAG execution with proper error handling and thread safety
      */
     fun runRAG(
-        query: String,
-        topK: Int = 5,
-        callback: (RagResult?, String?) -> Unit
+        query: String, topK: Int = 5, callback: (RagResult?, String?) -> Unit
     ) {
         if (query.isBlank()) {
             Log.w(TAG, "RAG aborted: Empty query")
@@ -432,10 +415,7 @@ object DataHubManager {
      * Check if RAG is ready for use
      */
     fun isRAGReady(): Boolean {
-        return isInitialized.get() &&
-                isEmbeddingInitialized.get() &&
-                _currentDataSet.value != null &&
-                _ragStatus.value == RAGStatus.READY
+        return isInitialized.get() && isEmbeddingInitialized.get() && _currentDataSet.value != null && _ragStatus.value == RAGStatus.READY
     }
 
     /**
@@ -464,8 +444,7 @@ object DataHubManager {
     }
 
     @Deprecated(
-        "Use searchDocuments directly",
-        ReplaceWith("searchDocuments(queryEmbedding, topK)")
+        "Use searchDocuments directly", ReplaceWith("searchDocuments(queryEmbedding, topK)")
     )
     fun search(queryEmbedding: FloatArray, topK: Int = 5): List<Doc> {
         return try {
@@ -479,15 +458,12 @@ object DataHubManager {
     // Accessor methods - these now properly manage instance separation
     fun getNative(): NativeLib? {
         Log.w(
-            TAG,
-            "getNative() is deprecated - use separate instances for generation and embedding"
+            TAG, "getNative() is deprecated - use separate instances for generation and embedding"
         )
         return null // Don't expose the native instance to prevent misuse
     }
 
     fun getWorker(): DataHubWorker? = dataHubWorker
-
-    fun getEmbeddingManager(): EmbeddingManager = embeddingManager
 
     /**
      * Cleanup resources
@@ -503,21 +479,6 @@ object DataHubManager {
             Log.d(TAG, "DataHubManager shutdown completed")
         } catch (e: Exception) {
             Log.e(TAG, "Error during shutdown", e)
-        }
-    }
-
-    private fun installEmbeddingModelFromAssets(ctx: Context, assetName: String, out: File): File {
-        return try {
-            ctx.assets.open(assetName).use { input ->
-                out.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            out
-        } catch (t: Throwable) {
-            // Clean partial files
-            runCatching { out.delete() }
-            throw IOException("Failed to copy asset $assetName", t)
         }
     }
 }
