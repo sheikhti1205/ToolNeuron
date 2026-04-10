@@ -25,7 +25,7 @@ import com.dark.tool_neuron.ui.theme.LocalDimens
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DevNotesBottomBar(navController: NavHostController) {
+fun DevNotesBottomBar(navController: NavHostController, onContinue: () -> Unit = {}) {
     val dimens = LocalDimens.current
 
     Row(
@@ -55,7 +55,8 @@ fun DevNotesBottomBar(navController: NavHostController) {
         }
         ActionTextButton(
             onClickListener = {
-                navController.navigate(NavScreens.HomeScreen.route) {
+                onContinue()
+                navController.navigate(NavScreens.SetupScreen.route) {
                     popUpTo(NavScreens.DevNotes.route) { inclusive = true }
                 }
             },
