@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.models.ui
+package com.dark.tool_neuron.model.ui
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
