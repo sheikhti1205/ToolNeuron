@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block large/banned binaries before they enter history.
+set -euo pipefail
+exec bash scripts/check-no-large-binaries.sh --staged

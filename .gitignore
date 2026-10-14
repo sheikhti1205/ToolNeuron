@@ -12,12 +12,33 @@
 /captures
 .externalNativeBuild
 .cxx
+**/.externalNativeBuild/
+**/.cxx/
+**/build/
+**/obj/
 local.properties
 /app/release/app-release.aab
+# Release artifacts (generated — never version-control; use GitHub Releases instead)
+*.apk
+*.aab
+*.zip
+*.aar.uncompressed
+/app/release/
+/repo/
+bootstrap*.zip
+# Downloaded / large model weights (history-only bloat; fetch at build time instead).
+# NOTE: plugins/expense/model.onnx is intentionally still tracked (required at HEAD).
+# Do NOT add *.onnx here.
+*.gguf
+*.safetensors
+*.pt
+*.bin
+# Transient native outputs
+*.o
+*.obj
 /RESEARCH_REPORT.md
 /docs/
 /.kotlin/
-/app/release/
 /.claude/
 /feats/
 /logs/
