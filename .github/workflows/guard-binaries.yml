@@ -1,0 +1,14 @@
+name: guard-binaries
+on:
+  pull_request:
+  push:
+    branches: [re-write, codex/server-model-roles-rag-gpu]
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Block large/banned binaries
+        run: bash scripts/check-no-large-binaries.sh --staged
